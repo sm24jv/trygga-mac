@@ -1,5 +1,3 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-
 mod bar_text;
 mod measure;
 
@@ -15,7 +13,6 @@ fn main() {
             measure::append("page.log", request.uri().query().unwrap_or(""));
             tauri::http::Response::builder()
                 .status(204)
-                .header("Access-Control-Allow-Origin", "*")
                 .body(Vec::new())
                 .unwrap()
         })
@@ -25,9 +22,11 @@ fn main() {
                 .icon_as_template(true)
                 .build(app)?;
 
+            // In code and not in tauri.conf.json: the title handler exists only on the builder.
             WebviewWindowBuilder::new(app, "panel", WebviewUrl::App("index.html".into()))
                 .inner_size(380.0, 640.0)
                 .visible(false)
+                // A hidden page is suspended by default, and the bar lives on its ticks.
                 .background_throttling(BackgroundThrottlingPolicy::Disabled)
                 .on_document_title_changed(|window, title| {
                     measure::append("title.log", &title);

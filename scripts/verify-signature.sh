@@ -8,6 +8,8 @@ executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Conten
 for arch in arm64 x86_64; do
   lipo "$app/Contents/MacOS/$executable" -verify_arch "$arch"
   codesign --verify --strict --deep --arch "$arch" "$app"
-  codesign --display --verbose=2 --arch "$arch" "$app" 2>&1 | grep -q '^Signature=adhoc$'
+  # Into a variable: under pipefail, grep -q stopping early would fail the pipe on a good signature.
+  details=$(codesign --display --verbose=2 --arch "$arch" "$app" 2>&1)
+  grep -q '^Signature=adhoc$' <<< "$details"
   echo "$arch: valid ad-hoc signature"
 done

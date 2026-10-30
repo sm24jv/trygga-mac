@@ -12,4 +12,7 @@ Linux.
 - **The `measure` job**, started by hand with *Run workflow*, runs the app for 75 minutes on each
   macOS version and logs what the hidden page did.
 
+The test page has no content security policy because it is bundled and calls the probe scheme,
+which logs its ticks past the title. Both go when the app loads trygga.
+
 The app's bundle identifier, `io.trygga.mac`, never changes: cookies and the updater hang on it.

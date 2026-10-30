@@ -2,6 +2,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
+// A tick of 60 s tolerates seconds of lag: the bar shows minutes.
 const LATE_MS = 65_000;
 
 function read(dir, file) {
@@ -29,6 +30,7 @@ function ticks(dir, file) {
     });
 }
 
+// The first tick has no tick before it, so its gap says nothing, and "trygga" has no gap at all.
 function gapLine(entries) {
   const gaps = entries.slice(1).map((entry) => entry.gapMs).filter((gap) => gap !== null);
   if (gaps.length === 0) return "no gaps";
