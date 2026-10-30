@@ -1,0 +1,66 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
+      - run: npm ci
+      - run: npx tauri build --target universal-apple-darwin --bundles dmg
+      - name: Name the disk image
+        run: mv src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg trygga.dmg
+      - name: The app carries its signature
+        run: |
+          mount=$(hdiutil attach trygga.dmg -nobrowse | grep -o '/Volumes/.*$')
+          cp -R "$mount/trygga.app" trygga.app
+          hdiutil detach "$mount"
+          scripts/verify-signature.sh trygga.app
+      - name: The check refuses an app without a signature
+        run: |
+          cp -R trygga.app unsigned.app
+          codesign --remove-signature unsigned.app
+          if scripts/verify-signature.sh unsigned.app; then
+            echo "verify-signature.sh passed an unsigned app"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trygga-dmg
+          path: trygga.dmg
+          if-no-files-found: error
+
+  measure:
+    if: github.event_name == 'workflow_dispatch'
+    needs: build
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    timeout-minutes: 100
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15, macos-26]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          name: trygga-dmg
+      - run: scripts/measure.sh trygga.dmg 75 measurement
+      - run: node scripts/summarize.mjs measurement | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: measurement-${{ matrix.os }}
+          path: measurement
