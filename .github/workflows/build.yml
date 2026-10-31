@@ -3,6 +3,7 @@ name: build
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
@@ -13,13 +14,28 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v5
+      - name: A release can be made
+        if: github.ref_type == 'tag'
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: scripts/check-release.sh "$GITHUB_REF_NAME"
       - uses: actions/setup-node@v5
         with:
           node-version: 24
       - run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
       - run: cargo test --manifest-path src-tauri/Cargo.toml
       - run: npm ci
-      - run: npx tauri build --target universal-apple-darwin --bundles dmg
+      - if: github.ref_type != 'tag'
+        run: npx tauri build --target universal-apple-darwin --bundles dmg
+      - name: Build, with the signed update archive
+        if: github.ref_type == 'tag'
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          npx tauri build --target universal-apple-darwin --bundles app,dmg \
+            --config '{"bundle":{"createUpdaterArtifacts":true}}'
       - name: Name the disk image
         run: mv src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg trygga.dmg
       - name: The app carries its signature
@@ -41,3 +57,30 @@ jobs:
           name: trygga-dmg
           path: trygga.dmg
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: github.ref_type == 'tag'
+        with:
+          name: trygga-update
+          path: src-tauri/target/universal-apple-darwin/release/bundle/macos/trygga.app.tar.gz*
+          if-no-files-found: error
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+      - name: Write the updater's file
+        run: scripts/updater-file.sh "$GITHUB_REF_NAME" release/trygga.app.tar.gz.sig > release/latest.json
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --generate-notes \
+            release/trygga.dmg release/trygga.app.tar.gz release/latest.json

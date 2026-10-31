@@ -13,6 +13,8 @@ use tauri::{
     AppHandle, LogicalPosition, LogicalSize, Manager, Rect, RunEvent, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder, WindowEvent,
 };
+use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
+use tauri_plugin_updater::UpdaterExt;
 
 const TRAY_ID: &str = "main";
 const WINDOW_LABEL: &str = "timer";
@@ -157,12 +159,41 @@ fn on_window_event(window: &WebviewWindow, event: &WindowEvent) {
     }
 }
 
+/// Only when the entry does not exist, because turning it off in macOS's login items leaves the
+/// file there: that choice stays. Only from Applications, because a first open from the disk image
+/// runs from a path that is gone at the next login. A failed read counts as there, so nothing is
+/// written on a guess.
+fn start_at_login(app: &AppHandle) {
+    let installed = std::env::current_exe().is_ok_and(|path| path.starts_with("/Applications"));
+    let login_item = app.autolaunch();
+    if installed && !login_item.is_enabled().unwrap_or(true) {
+        let _ = login_item.enable();
+    }
+}
+
+/// Swaps the bundle on disk and leaves the running app alone, so the update applies at the next
+/// launch. A failure, such as no network, waits for that launch too.
+async fn install_update(app: AppHandle) -> tauri_plugin_updater::Result<()> {
+    if let Some(update) = app.updater()?.check().await? {
+        update.download_and_install(|_, _| {}, || {}).await?;
+    }
+    Ok(())
+}
+
 fn main() {
     // No capability file exists and none may: without one the page reaches nothing native. The
     // Edit menu that copying and pasting need is in Tauri's default menu.
     tauri::Builder::default()
+        .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(IconClicks::default())
         .setup(|app| {
+            start_at_login(app.handle());
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = install_update(handle).await;
+            });
+
             let quit = PredefinedMenuItem::quit(app, Some("Quit"))?;
             TrayIconBuilder::with_id(TRAY_ID)
                 .icon(tauri::include_image!("icons/tray.png"))
