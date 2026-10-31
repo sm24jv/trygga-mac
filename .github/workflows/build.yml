@@ -41,26 +41,3 @@ jobs:
           name: trygga-dmg
           path: trygga.dmg
           if-no-files-found: error
-
-  measure:
-    if: github.event_name == 'workflow_dispatch'
-    needs: build
-    runs-on: ${{ matrix.os }}
-    continue-on-error: true
-    timeout-minutes: 100
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-15, macos-26]
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
-        with:
-          name: trygga-dmg
-      - run: scripts/measure.sh trygga.dmg 75 measurement
-      - run: node scripts/summarize.mjs measurement | tee -a "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: measurement-${{ matrix.os }}
-          path: measurement

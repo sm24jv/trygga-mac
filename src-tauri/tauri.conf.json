@@ -3,14 +3,8 @@
   "productName": "trygga",
   "version": "0.1.0",
   "identifier": "io.trygga.mac",
-  "build": {
-    "frontendDist": "../ui"
-  },
   "app": {
-    "windows": [],
-    "security": {
-      "csp": null
-    }
+    "windows": []
   },
   "bundle": {
     "active": true,
