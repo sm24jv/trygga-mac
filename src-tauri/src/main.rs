@@ -19,7 +19,7 @@ use tauri_plugin_updater::UpdaterExt;
 const TRAY_ID: &str = "main";
 const WINDOW_LABEL: &str = "timer";
 const WIDTH: f64 = 380.0;
-const HEIGHT: f64 = 640.0;
+const HEIGHT: f64 = 760.0;
 
 const HOST: &str = "app.trygga.io";
 const ADDRESS: &str = "https://app.trygga.io/timer";
